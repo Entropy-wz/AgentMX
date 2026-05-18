@@ -1,0 +1,38 @@
+{
+  "name": "agentmx",
+  "version": "0.1.0",
+  "description": "Agent Memory eXchange - Cognitive alignment system for AI coding tools",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "cognitive",
+    "alignment",
+    "memory"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^12.10.0",
+    "eventemitter3": "^5.0.4",
+    "uuid": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.9.0",
+    "@vitest/coverage-v8": "^4.1.6",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6"
+  }
+}
