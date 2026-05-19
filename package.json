@@ -12,7 +12,9 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "demo:g1": "tsx demo/scenario-g1-stale-read.ts",
+    "demo:interactive": "tsx demo/interactive-cli.ts"
   },
   "keywords": [
     "ai",
@@ -32,6 +34,7 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.9.0",
     "@vitest/coverage-v8": "^4.1.6",
+    "tsx": "^4.22.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.6"
   }
