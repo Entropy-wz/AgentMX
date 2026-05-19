@@ -52,11 +52,17 @@ AgentMX MCP Server 是一个基于 Model Context Protocol 的服务器，暴露 
 ```typescript
 {
   file_path: string;      // 文件绝对路径
-  content_hash: string;   // 文件内容的 SHA-256 hash
+  content_hash?: string;  // 文件内容的 SHA-256 hash（可选，会自动计算）
   agent_id?: string;      // Agent ID（可选，默认从环境变量获取）
   project_path?: string;  // 项目路径（可选，默认为当前工作目录）
 }
 ```
+
+**实现细节：**
+- 如果未提供 `content_hash`，工具会自动读取文件并计算 SHA-256 hash
+- 这使得 Claude Code Hooks 可以只传递 `file_path` 参数
+- 记录到 `agent_observation` 表（类型：`file_read`）
+- 发布 `agent_file_read` 事件到 `event_log` 表
 
 **返回：**
 ```typescript
@@ -82,12 +88,20 @@ AgentMX MCP Server 是一个基于 Model Context Protocol 的服务器，暴露 
 ```typescript
 {
   file_path: string;
-  old_hash: string | null;
-  new_hash: string;
+  old_hash?: string | null;  // 写入前的 hash（可选）
+  new_hash?: string;         // 写入后的 hash（可选，会自动计算）
   agent_id?: string;
   project_path?: string;
 }
 ```
+
+**实现细节：**
+- 如果未提供 `new_hash`，工具会自动读取文件并计算 SHA-256 hash
+- 这使得 Claude Code Hooks 可以只传递 `file_path` 参数
+- 记录文件状态到 `file_state` 表
+- 记录操作到 `agent_observation` 表（类型：`operation`）
+- 发布 `agent_file_write` 事件到 `event_log` 表（标识 agent 写入）
+- 发布 `file_state_changed` 事件到 `event_log` 表（通用文件变化）
 
 **返回：**
 ```typescript
@@ -254,49 +268,48 @@ AgentMX MCP Server 是一个基于 Model Context Protocol 的服务器，暴露 
 
 ## 配置与部署
 
-### 1. 安装依赖
+### 1. 构建 MCP Server
 
-```json
-{
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "agentmx": "^0.1.0"
-  }
-}
+```bash
+cd mcp-server
+npm install
+npm run build
 ```
 
-### 2. MCP Server 配置文件
+### 2. Claude Desktop 配置
 
-**位置：** `~/.claude/mcp-servers/agentmx.json`
-
-```json
-{
-  "name": "agentmx",
-  "description": "AgentMX cognitive state tracking for Claude",
-  "command": "node",
-  "args": ["/path/to/agentmx/mcp-server/dist/index.js"],
-  "env": {
-    "AGENTMX_DB_PATH": "~/.agentmx/db",
-    "AGENTMX_AGENT_ID": "claude-main",
-    "AGENTMX_AUTO_TRACK": "true"
-  }
-}
-```
-
-### 3. Claude Code 配置
-
-**位置：** `~/.claude/settings.json`
+**位置：** `%APPDATA%\Claude\claude_desktop_config.json` (Windows) 或 `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 
 ```json
 {
   "mcpServers": {
     "agentmx": {
       "command": "node",
-      "args": ["/path/to/agentmx/mcp-server/dist/index.js"],
+      "args": ["D:\\exp_all\\AgentMX\\mcp-server\\dist\\index.js"],
       "env": {
-        "AGENTMX_DB_PATH": "${workspaceFolder}/.agentmx/db",
-        "AGENTMX_AGENT_ID": "claude-${sessionId}",
-        "AGENTMX_AUTO_TRACK": "true"
+        "AGENTMX_AGENT_ID": "claude-desktop"
+      }
+    }
+  }
+}
+```
+
+**说明：**
+- `AGENTMX_AGENT_ID`: Agent 标识符，用于区分不同的 Claude 实例
+- 数据库路径会自动设置为项目根目录下的 `.agentmx/agentmx.db`
+
+### 3. Claude Code 配置（可选）
+
+如果要在 Claude Code CLI 中使用，可以在项目的 `.claude/settings.json` 中配置：
+
+```json
+{
+  "mcpServers": {
+    "agentmx": {
+      "command": "node",
+      "args": ["D:\\exp_all\\AgentMX\\mcp-server\\dist\\index.js"],
+      "env": {
+        "AGENTMX_AGENT_ID": "claude-code"
       }
     }
   }
@@ -305,93 +318,112 @@ AgentMX MCP Server 是一个基于 Model Context Protocol 的服务器，暴露 
 
 ## 自动追踪模式
 
-当 `AGENTMX_AUTO_TRACK=true` 时，MCP Server 可以提供自动追踪功能：
+AgentMX 通过 **Claude Code Hooks** 实现自动追踪，无需手动调用 MCP 工具。
 
-### 方式1：通过 MCP Resources
+### Claude Code Hooks 配置
 
-暴露一个 resource：`agentmx://auto-track-instructions`
+**位置：** 项目根目录的 `.claude/settings.json`
 
-内容：
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "agentmx",
+            "tool": "check_conflicts",
+            "input": {
+              "file_path": "${tool_input.file_path}"
+            }
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "agentmx",
+            "tool": "record_file_read",
+            "input": {
+              "file_path": "${tool_input.file_path}"
+            }
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "agentmx",
+            "tool": "record_file_write",
+            "input": {
+              "file_path": "${tool_input.file_path}"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
 ```
-When you read a file, immediately call the record_file_read tool with the file path and content hash.
-When you write a file, immediately call the record_file_write tool.
-Before writing to a file, call check_conflicts to ensure your understanding is current.
-If a conflict is detected, re-read the file before proceeding.
-```
 
-Claude 会自动将这个 resource 加载到 context 中，从而知道要调用这些工具。
+**工作原理：**
+1. **PostToolUse + Read**: Claude 每次读取文件后，自动调用 `record_file_read`
+2. **PreToolUse + Write/Edit**: Claude 写入文件前，自动调用 `check_conflicts` 检查冲突
+3. **PostToolUse + Write/Edit**: Claude 写入文件后，自动调用 `record_file_write`
 
-### 方式2：通过 MCP Prompts
+**优势：**
+- 完全自动化，Claude 无需手动调用工具
+- 零侵入性，不影响 Claude 的正常工作流
+- 实时追踪，所有文件操作都被记录
 
-提供一个 prompt template：`agentmx-workflow`
-
-```
-You are working with AgentMX cognitive state tracking. Follow this workflow:
-
-1. After reading any file:
-   - Call record_file_read with file_path and content_hash
-   - Note any potential conflicts returned
-
-2. Before writing to any file:
-   - Call check_conflicts for that file
-   - If conflicts exist, re-read the file first
-
-3. After writing to any file:
-   - Call record_file_write with old_hash and new_hash
-
-4. If you encounter unexpected file content:
-   - Call get_event_history to see what changed
-   - Call get_conflict_history to check for past issues
-
-This ensures your understanding of the codebase stays aligned with reality.
-```
+**配置示例：**
+参考 `examples/claude-code-hooks/` 目录中的完整配置示例。
 
 ## 工作流示例
 
-### 场景：Claude 修改一个文件
+### 场景：Claude 通过 Hooks 自动追踪文件操作
 
 ```typescript
-// 1. Claude 读取文件
+// 1. Claude 执行 Read 工具读取文件
 const content = await Read('/path/to/file.ts');
-const hash = computeHash(content);
 
-// 2. 调用 MCP tool 记录读取
-await mcp.call('record_file_read', {
-  file_path: '/path/to/file.ts',
-  content_hash: hash
-});
+// 2. PostToolUse Hook 自动触发，调用 record_file_read
+// （Claude 无需手动调用，Hooks 系统自动执行）
+// MCP Server 自动计算文件 hash 并记录到数据库
 
 // 3. Claude 分析并准备修改
 
-// 4. 在写入前检查冲突
-const conflictCheck = await mcp.call('check_conflicts', {
-  file_path: '/path/to/file.ts'
-});
+// 4. Claude 执行 Write 工具前，PreToolUse Hook 自动触发
+// 自动调用 check_conflicts 检查冲突
+// 如果发现冲突，Hook 会返回警告信息给 Claude
 
-if (conflictCheck.has_conflict) {
-  // 5a. 发现冲突，重新读取
-  console.log('⚠️ File was modified, re-reading...');
+// 5a. 如果有冲突，Claude 会看到警告并重新读取
+if (conflictDetected) {
+  console.log('⚠️ Conflict detected, re-reading file...');
   const newContent = await Read('/path/to/file.ts');
-  const newHash = computeHash(newContent);
-  
-  await mcp.call('record_file_read', {
-    file_path: '/path/to/file.ts',
-    content_hash: newHash
-  });
-  
-  // 重新分析...
-} else {
-  // 5b. 无冲突，执行写入
-  await Write('/path/to/file.ts', modifiedContent);
-  const newHash = computeHash(modifiedContent);
-  
-  await mcp.call('record_file_write', {
-    file_path: '/path/to/file.ts',
-    old_hash: hash,
-    new_hash: newHash
-  });
+  // PostToolUse Hook 再次自动记录新的读取
 }
+
+// 5b. Claude 执行写入
+await Write('/path/to/file.ts', modifiedContent);
+
+// 6. PostToolUse Hook 自动触发，调用 record_file_write
+// MCP Server 自动计算新的 hash 并记录变更
 ```
+
+**关键点：**
+- Claude 只需正常使用 Read/Write/Edit 工具
+- 所有追踪操作由 Hooks 系统自动完成
+- 冲突检测在写入前自动执行
+- 完全透明，不影响 Claude 的工作流
 
 ## 性能考虑
 
@@ -441,13 +473,40 @@ AGENTMX_LOG_LEVEL=DEBUG node mcp-server/dist/index.js
 AGENTMX_LOG_FILE=~/.agentmx/server.log node mcp-server/dist/index.js
 ```
 
-## 下一步实现
+## 项目状态
 
-1. **Phase 1**: 实现基础 MCP Server 框架
-2. **Phase 2**: 实现 7 个核心 tools
-3. **Phase 3**: 添加 auto-track resources 和 prompts
-4. **Phase 4**: 集成测试与 Claude Code
-5. **Phase 5**: 性能优化与监控
+### 已完成功能
+
+✅ **Phase 1**: MCP Server 基础框架
+- 基于 @modelcontextprotocol/sdk 实现
+- 支持 stdio 通信协议
+- 集成 AgentMX Core (EventBus + CognitiveStore)
+
+✅ **Phase 2**: 7 个核心 MCP 工具
+- `record_file_read`: 记录文件读取操作
+- `record_file_write`: 记录文件写入操作
+- `check_conflicts`: 检查认知冲突
+- `get_event_history`: 查询事件历史
+- `get_conflict_history`: 查询冲突历史
+- `get_file_state`: 获取文件状态
+- `resolve_conflict`: 解决冲突
+
+✅ **Phase 3**: Claude Code Hooks 集成
+- 通过 Hooks 实现自动追踪
+- 提供配置示例和文档
+- 零侵入性设计
+
+### 待完成功能
+
+🔄 **Phase 4**: 测试与优化
+- 集成测试覆盖
+- 性能基准测试
+- 错误处理完善
+
+🔄 **Phase 5**: 高级功能
+- 批量操作支持
+- 查询结果缓存
+- 监控与可观测性
 
 ## 参考资料
 

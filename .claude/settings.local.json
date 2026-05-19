@@ -11,7 +11,8 @@
       "Bash(node test/test-project-control.mjs)",
       "Bash(git commit *)",
       "Bash(chmod +x agentmx.sh)",
-      "Bash(npm list *)"
+      "Bash(npm list *)",
+      "mcp__agentmx__get_event_history"
     ]
   }
 }

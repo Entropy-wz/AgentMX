@@ -77,7 +77,30 @@ cd C:\path\to\your\project
 type nul > .agentmx-enabled
 ```
 
-### 5. 重启 Claude Code
+### 5. 配置 Claude Code Hooks（可选但推荐）
+
+**Hooks 可以实现完全自动化的文件追踪**，无需手动调用工具或依赖 Claude 遵守系统提示。
+
+复制示例配置到你的项目：
+
+```bash
+# 进入你的项目目录
+cd /path/to/your/project
+
+# 创建 .claude 目录（如果不存在）
+mkdir -p .claude
+
+# 复制 hooks 配置
+cp /path/to/AgentMX/examples/claude-code-hooks/settings.json .claude/settings.json
+```
+
+**配置说明**：
+- **PreToolUse Hook**：在 Write/Edit 前自动调用 `check_conflicts` 检查冲突
+- **PostToolUse Hook**：在 Read 后自动调用 `record_file_read`，在 Write/Edit 后自动调用 `record_file_write`
+
+详细配置说明请参考：[examples/claude-code-hooks/README.md](examples/claude-code-hooks/README.md)
+
+### 6. 重启 Claude Code
 
 配置修改后需要重启 Claude Code 才能生效。
 
@@ -179,7 +202,10 @@ touch .agentmx-enabled
 }
 ```
 
-**注意：** 当 `AGENTMX_AUTO_TRACK=true` 时，Claude 会收到系统级提示，自动在文件操作后调用 AgentMX 工具。这个功能已实现，但依赖 Claude 的遵守（预期可靠性约 80%）。如果 Claude 没有自动调用，你可以手动提示。
+**注意：** 
+- 当 `AGENTMX_AUTO_TRACK=true` 时，Claude 会收到系统级提示，自动在文件操作后调用 AgentMX 工具（预期可靠性约 80%）
+- **推荐使用 Claude Code Hooks**（见步骤 5）实现 100% 可靠的自动追踪，无需依赖 Claude 遵守提示
+- 如果配置了 Hooks，文件操作会自动触发 AgentMX 工具，完全静默执行
 
 ### 场景2：检测认知冲突
 
@@ -238,22 +264,39 @@ touch .agentmx-enabled
   "events": [
     {
       "event_id": "uuid-1",
-      "event_type": "file_state_changed",
+      "event_type": "agent_file_write",
       "timestamp": 1234567890,
+      "agent_id": "claude-opus-4-7",
       "file_path": "/path/to/src/main.ts",
-      "details": { "change_type": "modified", "new_hash": "..." }
+      "old_hash": "abc123...",
+      "new_hash": "def456..."
     },
     {
       "event_id": "uuid-2",
       "event_type": "agent_file_read",
       "timestamp": 1234567800,
-      "agent_id": "claude-main",
-      "details": { "content_hash": "..." }
+      "agent_id": "claude-opus-4-7",
+      "file_path": "/path/to/src/main.ts",
+      "content_hash": "abc123..."
+    },
+    {
+      "event_id": "uuid-3",
+      "event_type": "file_state_changed",
+      "timestamp": 1234567890,
+      "file_path": "/path/to/src/main.ts",
+      "change_type": "modified",
+      "old_hash": "abc123...",
+      "new_hash": "def456..."
     }
   ],
-  "total_count": 2
+  "total_count": 3
 }
 ```
+
+**事件类型说明：**
+- `agent_file_read` - Agent 读取文件
+- `agent_file_write` - Agent 写入文件
+- `file_state_changed` - 文件状态变化（包括 agent 写入和外部修改）
 
 ### 场景4：解决冲突
 
@@ -344,7 +387,7 @@ Agent 标识符：
 
 自动追踪模式：
 
-- `true`：注入系统级提示，要求 Claude 自动在文件操作后调用 AgentMX 工具（推荐）
+- `true`：注入系统级提示，要求 Claude 自动在文件操作后调用 AgentMX 工具
   - **实现方式：** System Prompt 注入
   - **可靠性：** 约 80%（依赖 Claude 遵守系统提示）
   - **行为：** Claude 会在读取文件后自动调用 `record_file_read`，写入前调用 `check_conflicts`，写入后调用 `record_file_write`
@@ -354,6 +397,8 @@ Agent 标识符：
   - **适用场景：** 你想完全控制何时使用 AgentMX
   - **优点：** 不增加系统提示的 token 成本
   - **缺点：** 每次都需要手动提示
+
+**推荐：** 使用 Claude Code Hooks（见步骤 5）实现 100% 可靠的自动追踪，无需依赖此选项。
 
 ### AGENTMX_LOG_LEVEL
 
@@ -498,12 +543,12 @@ claude-code review --with-agentmx
 ## 💡 最佳实践
 
 1. **项目级启用**：只在需要的项目中创建 `.agentmx-enabled`
-2. **加入 .gitignore**：避免提交标记文件
+2. **使用 Hooks**：配置 Claude Code Hooks 实现 100% 可靠的自动追踪
+3. **加入 .gitignore**：避免提交标记文件和数据库
    ```gitignore
    .agentmx-enabled
    .agentmx/
    ```
-3. **启用自动追踪**：`AGENTMX_AUTO_TRACK=true`
 4. **定期清理**：删除旧项目的 `.agentmx/` 目录
 5. **查看冲突历史**：定期检查是否有频繁冲突的文件
 6. **监控日志**：出现问题时启用 DEBUG 日志

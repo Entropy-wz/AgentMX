@@ -29,7 +29,7 @@
 | 参数 | 类型 | 必需 | 说明 |
 |------|------|------|------|
 | `file_path` | string | ✅ | 文件的绝对路径 |
-| `content_hash` | string | ✅ | 文件内容的 SHA-256 哈希值 |
+| `content_hash` | string | ❌ | 文件内容的 SHA-256 哈希值（可选，会自动计算） |
 | `agent_id` | string | ❌ | Agent 标识符（默认使用环境变量 `AGENTMX_AGENT_ID`） |
 | `project_path` | string | ❌ | 项目根目录路径（默认使用当前工作目录） |
 
@@ -56,21 +56,23 @@
 ### 使用示例
 
 ```javascript
-// 读取文件
+// 通过 Claude Code Hooks 自动调用（推荐）
+// PostToolUse Hook 会在 Read 操作后自动触发
 const content = await Read('/path/to/file.ts');
-const hash = computeHash(content);
+// record_file_read 自动被调用，无需手动操作
 
-// 记录读取操作
+// 或手动调用（如果不使用 Hooks）
 await record_file_read({
-  file_path: '/path/to/file.ts',
-  content_hash: hash
+  file_path: '/path/to/file.ts'
+  // content_hash 会自动计算
 });
 ```
 
 ### 注意事项
 
+- **推荐使用 Claude Code Hooks 自动调用**，无需手动操作
+- 如果未提供 `content_hash`，工具会自动读取文件并计算 SHA-256 哈希值
 - 必须在项目根目录有 `.agentmx-enabled` 文件，否则返回错误
-- `content_hash` 必须是 SHA-256 哈希值（64 个十六进制字符）
 - 如果文件状态已改变，会在返回中提示潜在冲突
 
 ---
@@ -90,7 +92,7 @@ await record_file_read({
 | 参数 | 类型 | 必需 | 说明 |
 |------|------|------|------|
 | `file_path` | string | ✅ | 文件的绝对路径 |
-| `new_hash` | string | ✅ | 写入后文件内容的 SHA-256 哈希值 |
+| `new_hash` | string | ❌ | 写入后文件内容的 SHA-256 哈希值（可选，会自动计算） |
 | `old_hash` | string | ❌ | 写入前文件内容的哈希值（新文件时为 null） |
 | `agent_id` | string | ❌ | Agent 标识符 |
 | `project_path` | string | ❌ | 项目根目录路径 |
@@ -107,28 +109,26 @@ await record_file_read({
 ### 使用示例
 
 ```javascript
-// 读取原文件
-const oldContent = await Read('/path/to/file.ts');
-const oldHash = computeHash(oldContent);
-
-// 修改并写入
-const newContent = modifyContent(oldContent);
+// 通过 Claude Code Hooks 自动调用（推荐）
+// PostToolUse Hook 会在 Write/Edit 操作后自动触发
 await Write('/path/to/file.ts', newContent);
-const newHash = computeHash(newContent);
+// record_file_write 自动被调用，无需手动操作
 
-// 记录写入操作
+// 或手动调用（如果不使用 Hooks）
 await record_file_write({
-  file_path: '/path/to/file.ts',
-  old_hash: oldHash,
-  new_hash: newHash
+  file_path: '/path/to/file.ts'
+  // new_hash 会自动计算
+  // old_hash 可选
 });
 ```
 
 ### 注意事项
 
+- **推荐使用 Claude Code Hooks 自动调用**，无需手动操作
+- 如果未提供 `new_hash`，工具会自动读取文件并计算 SHA-256 哈希值
 - 如果是新建文件，`old_hash` 可以省略或传 `null`
 - 写入操作会更新数据库中的 `file_state` 表
-- 会发布 `file_state_changed` 事件到事件总线
+- 会发布 `agent_file_write` 和 `file_state_changed` 事件到事件总线
 
 ---
 
@@ -182,7 +182,15 @@ await record_file_write({
 ### 使用示例
 
 ```javascript
-// 检查冲突
+// 通过 Claude Code Hooks 自动调用（推荐）
+// PreToolUse Hook 会在 Write/Edit 操作前自动触发
+await Write('/path/to/file.ts', newContent);
+// check_conflicts 在写入前自动被调用
+
+// 如果检测到冲突，Hook 会返回警告信息
+// Claude 会看到警告并决定是否重新读取文件
+
+// 或手动调用（如果不使用 Hooks）
 const check = await check_conflicts({
   file_path: '/path/to/file.ts'
 });
@@ -190,19 +198,7 @@ const check = await check_conflicts({
 if (check.has_conflict) {
   // 重新读取文件
   const newContent = await Read('/path/to/file.ts');
-  const newHash = computeHash(newContent);
-  
-  // 重新记录读取
-  await record_file_read({
-    file_path: '/path/to/file.ts',
-    content_hash: newHash
-  });
-  
   // 基于最新内容进行修改
-  // ...
-} else {
-  // 安全，可以直接修改
-  // ...
 }
 ```
 
@@ -214,8 +210,8 @@ if (check.has_conflict) {
 
 ### 注意事项
 
+- **推荐使用 Claude Code Hooks 自动调用**，在写入前自动检查
 - 如果检测到冲突，会自动记录到 `conflict_record` 表
-- 建议在每次写入前都调用此工具
 - 冲突检测基于 agent 最后一次 `record_file_read` 的时间戳
 
 ---
@@ -294,6 +290,7 @@ if (check.has_conflict) {
 |------|------|----------|
 | `file_state_changed` | 文件状态改变 | 调用 `record_file_write` 时 |
 | `agent_file_read` | Agent 读取文件 | 调用 `record_file_read` 时 |
+| `agent_file_write` | Agent 写入文件 | 调用 `record_file_write` 时 |
 
 ### 使用示例
 
@@ -555,20 +552,37 @@ if (check.has_conflict) {
 
 ## 完整工作流示例
 
-### 场景：修改文件
+### 使用 Claude Code Hooks（推荐）
+
+```javascript
+// 1. 读取文件（PostToolUse Hook 自动记录）
+const content = await Read('/path/to/file.ts');
+// → record_file_read 自动被调用
+
+// 2. 分析并准备修改
+const modifiedContent = analyzeAndModify(content);
+
+// 3. 写入文件（PreToolUse Hook 自动检查冲突）
+await Write('/path/to/file.ts', modifiedContent);
+// → check_conflicts 在写入前自动被调用
+// → 如果有冲突，会收到警告
+// → record_file_write 在写入后自动被调用
+
+// 完全自动化，无需手动调用任何 MCP 工具
+```
+
+### 手动调用工具（不使用 Hooks）
 
 ```javascript
 // 1. 读取文件
 const content = await Read('/path/to/file.ts');
-const hash = computeHash(content);
 
-// 2. 记录读取
+// 2. 手动记录读取
 await record_file_read({
-  file_path: '/path/to/file.ts',
-  content_hash: hash
+  file_path: '/path/to/file.ts'
 });
 
-// 3. 在修改前检查冲突
+// 3. 在修改前手动检查冲突
 const check = await check_conflicts({
   file_path: '/path/to/file.ts'
 });
@@ -576,11 +590,9 @@ const check = await check_conflicts({
 if (check.has_conflict) {
   // 3a. 如果有冲突，重新读取
   const newContent = await Read('/path/to/file.ts');
-  const newHash = computeHash(newContent);
   
   await record_file_read({
-    file_path: '/path/to/file.ts',
-    content_hash: newHash
+    file_path: '/path/to/file.ts'
   });
   
   // 3b. 解决冲突
@@ -591,21 +603,19 @@ if (check.has_conflict) {
   
   // 使用最新内容
   content = newContent;
-  hash = newHash;
 }
 
 // 4. 修改文件
 const modifiedContent = modifyContent(content);
 await Write('/path/to/file.ts', modifiedContent);
-const newHash = computeHash(modifiedContent);
 
-// 5. 记录写入
+// 5. 手动记录写入
 await record_file_write({
-  file_path: '/path/to/file.ts',
-  old_hash: hash,
-  new_hash: newHash
+  file_path: '/path/to/file.ts'
 });
 ```
+
+**推荐使用 Hooks 方式**，可以完全自动化追踪，无需手动调用工具。
 
 ---
 

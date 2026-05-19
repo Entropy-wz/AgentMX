@@ -43,6 +43,15 @@ export interface AgentFileReadEvent extends BaseEvent {
   read_timestamp: number;
 }
 
+export interface AgentFileWriteEvent extends BaseEvent {
+  event_type: 'agent_file_write';
+  agent_id: string;
+  file_path: string;
+  old_hash: string | null;
+  new_hash: string;
+  write_timestamp: number;
+}
+
 export interface AgentOperationEvent extends BaseEvent {
   event_type: 'agent_operation';
   agent_id: string;
@@ -99,6 +108,7 @@ export type AgentMXEvent =
   | FileMightChangedEvent
   | FileStateChangedEvent
   | AgentFileReadEvent
+  | AgentFileWriteEvent
   | AgentOperationEvent
   | AgentCommandExecutedEvent
   | CognitiveConflictEvent

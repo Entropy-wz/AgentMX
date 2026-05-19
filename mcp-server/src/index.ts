@@ -22,6 +22,7 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import crypto from 'node:crypto';
 
 // Environment configuration
@@ -221,7 +222,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             content_hash: {
               type: 'string',
-              description: 'SHA-256 hash of the file content',
+              description: 'SHA-256 hash of the file content (optional, will be computed if not provided)',
             },
             agent_id: {
               type: 'string',
@@ -232,7 +233,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: 'Project root path (optional, defaults to current working directory)',
             },
           },
-          required: ['file_path', 'content_hash'],
+          required: ['file_path'],
         },
       },
       {
@@ -251,7 +252,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             new_hash: {
               type: 'string',
-              description: 'SHA-256 hash of the file content after write',
+              description: 'SHA-256 hash of the file content after write (optional, will be computed if not provided)',
             },
             agent_id: {
               type: 'string',
@@ -262,7 +263,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: 'Project root path (optional)',
             },
           },
-          required: ['file_path', 'new_hash'],
+          required: ['file_path'],
         },
       },
       {
@@ -400,11 +401,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case 'record_file_read': {
-        const { file_path, content_hash, agent_id = AGENTMX_AGENT_ID, project_path = process.cwd() } = args as any;
+        const { file_path, content_hash: provided_hash, agent_id = AGENTMX_AGENT_ID, project_path = process.cwd() } = args as any;
 
         // Check if AgentMX is enabled for this project
         if (!isAgentMXEnabled(project_path)) {
           return createNotEnabledResponse(project_path);
+        }
+
+        // Compute hash if not provided
+        let content_hash = provided_hash;
+        if (!content_hash || content_hash.trim() === '') {
+          try {
+            const fileContent = await readFile(file_path, 'utf-8');
+            content_hash = crypto.createHash('sha256').update(fileContent).digest('hex');
+            log('DEBUG', 'Computed content_hash for file', { file_path, content_hash });
+          } catch (error) {
+            log('ERROR', 'Failed to compute content_hash', { file_path, error });
+            return {
+              content: [{ type: 'text', text: JSON.stringify({ error: `Failed to read file: ${error}` }) }],
+              isError: true,
+            };
+          }
         }
 
         log('DEBUG', 'record_file_read', { file_path, content_hash, agent_id });
@@ -456,11 +473,27 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'record_file_write': {
-        const { file_path, old_hash, new_hash, agent_id = AGENTMX_AGENT_ID, project_path = process.cwd() } = args as any;
+        const { file_path, old_hash, new_hash: provided_new_hash, agent_id = AGENTMX_AGENT_ID, project_path = process.cwd() } = args as any;
 
         // Check if AgentMX is enabled for this project
         if (!isAgentMXEnabled(project_path)) {
           return createNotEnabledResponse(project_path);
+        }
+
+        // Compute new_hash if not provided
+        let new_hash = provided_new_hash;
+        if (!new_hash || new_hash.trim() === '') {
+          try {
+            const fileContent = await readFile(file_path, 'utf-8');
+            new_hash = crypto.createHash('sha256').update(fileContent).digest('hex');
+            log('DEBUG', 'Computed new_hash for file', { file_path, new_hash });
+          } catch (error) {
+            log('ERROR', 'Failed to compute new_hash', { file_path, error });
+            return {
+              content: [{ type: 'text', text: JSON.stringify({ error: `Failed to read file: ${error}` }) }],
+              isError: true,
+            };
+          }
         }
 
         log('DEBUG', 'record_file_write', { file_path, old_hash, new_hash, agent_id });
@@ -483,7 +516,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           metadata: { old_hash, project_path, operation: 'write' },
         });
 
-        // Publish event
+        // Publish agent_file_write event (for agent action tracking)
+        await eventBus.publish({
+          event_id: crypto.randomUUID(),
+          timestamp: Date.now(),
+          project_path,
+          event_type: 'agent_file_write',
+          agent_id,
+          file_path,
+          old_hash: old_hash || null,
+          new_hash,
+          write_timestamp: Date.now(),
+        });
+
+        // Publish file_state_changed event (for file system tracking)
         await eventBus.publish({
           event_id: crypto.randomUUID(),
           timestamp: Date.now(),
@@ -521,7 +567,41 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         log('DEBUG', 'check_conflicts', { file_path, agent_id });
 
         const lastRead = await store.getAgentLastRead(agent_id, file_path);
-        const currentState = await store.getCurrentFileState(file_path);
+        let currentState = await store.getCurrentFileState(file_path);
+
+        // If no current state exists, compute it from the actual file
+        if (!currentState) {
+          try {
+            const fileContent = await readFile(file_path, 'utf-8');
+            const current_hash = crypto.createHash('sha256').update(fileContent).digest('hex');
+            log('DEBUG', 'Computed current file hash for conflict check', { file_path, current_hash });
+
+            // Create a temporary state object for comparison
+            currentState = {
+              snapshot_id: crypto.randomUUID(),
+              file_path,
+              content_hash: current_hash,
+              mtime: Date.now(),
+              size: fileContent.length,
+              is_current: true,
+              captured_at: Date.now(),
+            };
+          } catch (error) {
+            log('ERROR', 'Failed to read file for conflict check', { file_path, error });
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    has_conflict: false,
+                    conflicts: [],
+                    warning: `Could not read file to check for conflicts: ${error}`,
+                  }, null, 2),
+                },
+              ],
+            };
+          }
+        }
 
         const conflicts = [];
 

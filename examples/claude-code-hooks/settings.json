@@ -1,0 +1,55 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[PreToolUse] About to Write/Edit file'"
+          },
+          {
+            "type": "mcp_tool",
+            "server": "agentmx",
+            "tool": "check_conflicts",
+            "input": {
+              "file_path": "${tool_input.file_path}"
+            }
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "mcp_tool",
+            "server": "agentmx",
+            "tool": "record_file_read",
+            "input": {
+              "file_path": "${tool_input.file_path}"
+            }
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[PostToolUse] Finished Write/Edit file'"
+          },
+          {
+            "type": "mcp_tool",
+            "server": "agentmx",
+            "tool": "record_file_write",
+            "input": {
+              "file_path": "${tool_input.file_path}"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
