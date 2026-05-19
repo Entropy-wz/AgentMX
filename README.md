@@ -47,14 +47,15 @@ npm run build
       "command": "node",
       "args": ["/path/to/AgentMX/mcp-server/dist/index.js"],
       "env": {
-        "AGENTMX_DB_PATH": "${workspaceFolder}/.agentmx/agentmx.db",
-        "AGENTMX_AGENT_ID": "claude-${sessionId}",
-        "AGENTMX_AUTO_TRACK": "true"
+        "AGENTMX_AUTO_TRACK": "true",
+        "AGENTMX_LOG_LEVEL": "INFO"
       }
     }
   }
 }
 ```
+
+MCP Server 会自动检测项目目录（通过 `.agentmx-enabled` 标记文件）。
 
 ### 3. 为项目启用 AgentMX
 

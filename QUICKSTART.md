@@ -35,8 +35,6 @@ npm run build
       "command": "node",
       "args": ["D:/exp_all/AgentMX/mcp-server/dist/index.js"],
       "env": {
-        "AGENTMX_DB_PATH": "${workspaceFolder}/.agentmx/agentmx.db",
-        "AGENTMX_AGENT_ID": "claude-${sessionId}",
         "AGENTMX_AUTO_TRACK": "true",
         "AGENTMX_LOG_LEVEL": "INFO"
       }
@@ -44,6 +42,8 @@ npm run build
   }
 }
 ```
+
+**注意：** MCP Server 会自动检测项目目录。如果项目有 `.agentmx-enabled` 文件，数据库会保存在项目的 `.agentmx/` 目录下；否则使用全局目录 `~/.agentmx/db/`。
 
 **重要：** 将路径 `D:/exp_all/AgentMX/mcp-server/dist/index.js` 替换为你的实际路径。
 

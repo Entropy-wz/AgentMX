@@ -25,7 +25,21 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 
 // Environment configuration
-const AGENTMX_DB_PATH = process.env.AGENTMX_DB_PATH || path.join(os.homedir(), '.agentmx', 'db', 'agentmx.db');
+// Auto-detect project root: use cwd if it has .agentmx-enabled, otherwise use home directory
+function getDefaultDbPath(): string {
+  const cwd = process.cwd();
+  const enabledMarker = path.join(cwd, '.agentmx-enabled');
+
+  if (fs.existsSync(enabledMarker)) {
+    // Project has AgentMX enabled, use project-local database
+    return path.join(cwd, '.agentmx', 'agentmx.db');
+  } else {
+    // Fall back to home directory
+    return path.join(os.homedir(), '.agentmx', 'db', 'agentmx.db');
+  }
+}
+
+const AGENTMX_DB_PATH = process.env.AGENTMX_DB_PATH || getDefaultDbPath();
 const AGENTMX_AGENT_ID = process.env.AGENTMX_AGENT_ID || 'claude-main';
 const AGENTMX_AUTO_TRACK = process.env.AGENTMX_AUTO_TRACK === 'true';
 const AGENTMX_LOG_LEVEL = process.env.AGENTMX_LOG_LEVEL || 'INFO';
