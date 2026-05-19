@@ -1,0 +1,27 @@
+{
+  "name": "agentmx-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP Server for AgentMX cognitive state tracking",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "agentmx-mcp-server": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js",
+    "prebuild": "cd .. && npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "better-sqlite3": "^12.10.0",
+    "eventemitter3": "^5.0.4",
+    "uuid": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.9.0",
+    "typescript": "^6.0.3"
+  }
+}

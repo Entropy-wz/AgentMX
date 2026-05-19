@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "agentmx": {
+      "command": "node",
+      "args": ["D:/exp_all/AgentMX/mcp-server/dist/index.js"],
+      "env": {
+        "AGENTMX_DB_PATH": "${workspaceFolder}/.agentmx/agentmx.db",
+        "AGENTMX_AGENT_ID": "claude-${sessionId}",
+        "AGENTMX_AUTO_TRACK": "true",
+        "AGENTMX_LOG_LEVEL": "INFO"
+      }
+    }
+  }
+}
