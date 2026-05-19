@@ -211,6 +211,51 @@ export class CognitiveStore implements ICognitiveStore {
     }));
   }
 
+  async getAgentsWithObservations(filePath: string): Promise<string[]> {
+    const rows = this.db.prepare(`
+      SELECT DISTINCT agent_id
+      FROM agent_observation
+      WHERE file_path = ?
+      ORDER BY observed_at DESC
+    `).all(filePath) as any[];
+
+    return rows.map(row => row.agent_id);
+  }
+
+  async recordFileStateBatch(snapshots: Omit<FileSnapshot, 'snapshot_id' | 'captured_at'>[]): Promise<string[]> {
+    const snapshot_ids: string[] = [];
+    const captured_at = Date.now();
+
+    const transaction = this.db.transaction(() => {
+      for (const snapshot of snapshots) {
+        const snapshot_id = uuidv4();
+        snapshot_ids.push(snapshot_id);
+
+        // Mark previous snapshots as not current
+        if (snapshot.is_current) {
+          this.db.prepare('UPDATE file_state SET is_current = 0 WHERE file_path = ? AND is_current = 1')
+            .run(snapshot.file_path);
+        }
+
+        this.db.prepare(`
+          INSERT INTO file_state (snapshot_id, file_path, content_hash, mtime, size, is_current, captured_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          snapshot_id,
+          snapshot.file_path,
+          snapshot.content_hash,
+          snapshot.mtime,
+          snapshot.size,
+          snapshot.is_current ? 1 : 0,
+          captured_at
+        );
+      }
+    });
+
+    transaction();
+    return snapshot_ids;
+  }
+
   // ============================================================================
   // Conflict Management
   // ============================================================================

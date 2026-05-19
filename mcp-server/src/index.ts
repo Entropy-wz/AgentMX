@@ -18,6 +18,9 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { CognitiveStore } from '../../dist/core/cognitive-store.js';
 import { EventBus } from '../../dist/core/event-bus.js';
+import { FileSystemWatcher } from '../../dist/core/file-system-watcher.js';
+import { FileStateScanner } from '../../dist/core/file-state-scanner.js';
+import { ConflictDetector } from '../../dist/core/conflict-detector.js';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import os from 'node:os';
@@ -106,6 +109,9 @@ function createNotEnabledResponse(projectPath: string) {
 // Initialize AgentMX
 let store: CognitiveStore;
 let eventBus: EventBus;
+let watcher: FileSystemWatcher | null = null;
+let scanner: FileStateScanner | null = null;
+let detector: ConflictDetector | null = null;
 
 try {
   // Ensure directory exists
@@ -120,6 +126,20 @@ try {
 } catch (error) {
   log('ERROR', 'Failed to initialize AgentMX', error);
   process.exit(1);
+}
+
+// Initialize watcher components
+function initializeWatcher() {
+  if (!watcher) {
+    watcher = new FileSystemWatcher(eventBus);
+    scanner = new FileStateScanner();
+    detector = new ConflictDetector();
+
+    scanner.start(eventBus, store);
+    detector.start(eventBus, store);
+
+    log('INFO', 'File system watcher components initialized');
+  }
 }
 
 // Create MCP server
@@ -389,6 +409,34 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
           },
           required: ['conflict_id', 'resolution_action'],
+        },
+      },
+      {
+        name: 'start_watching',
+        description: 'Start watching a project for file changes. Enables automatic conflict detection when files change externally.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            project_path: {
+              type: 'string',
+              description: 'Project root path to watch (optional, defaults to current working directory)',
+            },
+          },
+          required: [],
+        },
+      },
+      {
+        name: 'stop_watching',
+        description: 'Stop watching a project for file changes.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            project_path: {
+              type: 'string',
+              description: 'Project root path to stop watching (optional, defaults to current working directory)',
+            },
+          },
+          required: [],
         },
       },
     ],
@@ -767,6 +815,114 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      case 'start_watching': {
+        const { project_path = process.cwd() } = args as any;
+
+        // Check if AgentMX is enabled for this project
+        if (!isAgentMXEnabled(project_path)) {
+          return createNotEnabledResponse(project_path);
+        }
+
+        log('INFO', 'start_watching', { project_path });
+
+        try {
+          initializeWatcher();
+
+          if (watcher!.isWatching(project_path)) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: true,
+                    message: `Already watching project: ${project_path}`,
+                    watched_projects: watcher!.getWatchedProjects(),
+                  }, null, 2),
+                },
+              ],
+            };
+          }
+
+          await watcher!.watch(project_path);
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: true,
+                  message: `Started watching project: ${project_path}`,
+                  watched_projects: watcher!.getWatchedProjects(),
+                  note: 'File changes will now be automatically detected and conflicts will be identified proactively.',
+                }, null, 2),
+              },
+            ],
+          };
+        } catch (error: any) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: false,
+                  error: error.message,
+                }, null, 2),
+              },
+            ],
+          };
+        }
+      }
+
+      case 'stop_watching': {
+        const { project_path = process.cwd() } = args as any;
+
+        log('INFO', 'stop_watching', { project_path });
+
+        try {
+          if (!watcher || !watcher.isWatching(project_path)) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success: true,
+                    message: `Project not being watched: ${project_path}`,
+                    watched_projects: watcher?.getWatchedProjects() || [],
+                  }, null, 2),
+                },
+              ],
+            };
+          }
+
+          await watcher.unwatch(project_path);
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: true,
+                  message: `Stopped watching project: ${project_path}`,
+                  watched_projects: watcher.getWatchedProjects(),
+                }, null, 2),
+              },
+            ],
+          };
+        } catch (error: any) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  success: false,
+                  error: error.message,
+                }, null, 2),
+              },
+            ],
+          };
+        }
+      }
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -933,6 +1089,33 @@ async function main() {
     agentId: AGENTMX_AGENT_ID,
   });
 }
+
+// Cleanup on shutdown
+process.on('SIGINT', async () => {
+  log('INFO', 'Shutting down AgentMX MCP Server...');
+
+  if (watcher) {
+    await watcher.close();
+    log('INFO', 'File system watcher closed');
+  }
+
+  if (scanner) {
+    scanner.stop();
+    log('INFO', 'File state scanner stopped');
+  }
+
+  if (detector) {
+    detector.stop();
+    log('INFO', 'Conflict detector stopped');
+  }
+
+  if (store) {
+    await store.close();
+    log('INFO', 'Cognitive store closed');
+  }
+
+  process.exit(0);
+});
 
 main().catch((error) => {
   log('ERROR', 'Server failed to start', error);

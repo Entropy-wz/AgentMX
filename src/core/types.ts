@@ -160,6 +160,7 @@ export type EventHandler<T extends AgentMXEvent = AgentMXEvent> = (event: T) => 
 
 export interface IEventBus {
   publish(event: AgentMXEvent): Promise<void>;
+  publishBatch(events: AgentMXEvent[]): Promise<void>;
   subscribe<T extends AgentMXEvent>(eventType: T['event_type'], handler: EventHandler<T>): () => void;
   getEventHistory(filter?: EventFilter): Promise<AgentMXEvent[]>;
 }
@@ -195,6 +196,49 @@ export interface ICognitiveStore {
   getUnresolvedConflicts(agentId?: string): Promise<ConflictRecord[]>;
   getConflictHistory(filePath?: string, limit?: number): Promise<ConflictRecord[]>;
 
+  // Batch operations
+  recordFileStateBatch(snapshots: Omit<FileSnapshot, 'snapshot_id' | 'captured_at'>[]): Promise<string[]>;
+  getAgentsWithObservations(filePath: string): Promise<string[]>;
+
   // Utility
   close(): Promise<void>;
+}
+
+// ============================================================================
+// File System Watcher Interface
+// ============================================================================
+
+export interface WatchOptions {
+  ignore?: string[];
+  debounceMs?: number;
+  persistent?: boolean;
+}
+
+export interface IFileSystemWatcher {
+  watch(projectPath: string, options?: WatchOptions): Promise<void>;
+  unwatch(projectPath: string): Promise<void>;
+  isWatching(projectPath: string): boolean;
+  getWatchedProjects(): string[];
+  close(): Promise<void>;
+}
+
+// ============================================================================
+// File State Scanner Interface
+// ============================================================================
+
+export interface IFileStateScanner {
+  start(eventBus: IEventBus, store: ICognitiveStore): void;
+  stop(): void;
+  scanFile(filePath: string): Promise<FileSnapshot | null>;
+  scanFiles(filePaths: string[]): Promise<Map<string, FileSnapshot>>;
+}
+
+// ============================================================================
+// Conflict Detector Interface
+// ============================================================================
+
+export interface IConflictDetector {
+  start(eventBus: IEventBus, store: ICognitiveStore): void;
+  stop(): void;
+  detectConflictsForFile(filePath: string): Promise<CognitiveConflictEvent[]>;
 }

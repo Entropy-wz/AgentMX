@@ -5,6 +5,76 @@ All notable changes to AgentMX will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-05-19
+
+### 🎉 File System Watcher & Automatic Conflict Detection
+
+AgentMX v0.2.0 adds real-time file system monitoring and automatic conflict detection, moving from semi-automatic (hook-based) tracking to fully automatic tracking.
+
+### ✨ Added
+
+#### File System Watcher
+- **FileSystemWatcher**: Chokidar-based file monitoring with debouncing
+  - Watches multiple projects simultaneously
+  - Configurable ignore patterns (node_modules, .git, dist, etc.)
+  - Debounce strategy: 100ms per-file, 500ms maxWait
+  - Publishes `FileMightChangedEvent` to EventBus
+
+#### File State Scanner
+- **FileStateScanner**: Automatic hash computation and state tracking
+  - Subscribes to `FileMightChangedEvent`
+  - Stream-based SHA-256 hashing for large files
+  - Publishes `FileStateChangedEvent` when content changes
+  - Batch scanning support for multiple files
+
+#### Conflict Detector
+- **ConflictDetector**: Event-driven automatic G1 conflict detection
+  - Subscribes to `FileStateChangedEvent`
+  - Detects conflicts for all agents with stale reads
+  - Publishes `CognitiveConflictEvent` automatically
+  - No manual `check_conflicts` calls needed
+
+#### Batch Operations
+- **EventBus.publishBatch()**: Batch event publishing with SQLite transactions
+- **CognitiveStore.recordFileStateBatch()**: Batch file state recording
+- **CognitiveStore.getAgentsWithObservations()**: Query agents with observations for a file
+
+#### New MCP Tools
+- **start_watching**: Start watching a project for file changes
+- **stop_watching**: Stop watching a project
+
+#### Hash Utilities
+- **computeFileHash()**: Stream-based SHA-256 hashing
+- **computeContentHash()**: In-memory content hashing
+- **computeFileHashWithStats()**: Hash with file stats (size, mtime)
+
+### 📦 Dependencies
+
+- Added `chokidar@^3.6.0` for file system watching
+- Added `lodash.debounce@^4.0.8` for debouncing
+
+### 🔧 Technical Improvements
+
+- Event-driven architecture: Watcher → Scanner → Detector communicate via EventBus
+- Proactive conflict detection: Conflicts detected when files change, not when agents write
+- Performance: Batch operations reduce SQLite transaction overhead
+- Memory efficient: Stream-based hashing for large files
+
+### 📝 Known Limitations
+
+- Only G1 (Stale Read) conflict detection (G2/G3 planned for v0.3)
+- File watching requires explicit `start_watching` tool call
+- No automatic file watching on server start (opt-in per project)
+
+### 🔜 Next Steps
+
+See [roadmap](README.md#-路线图) for v0.3+ features:
+- **v0.3**: G2/G3 conflict detection
+- **v0.4**: Decision Engine and intelligent recovery
+- **v0.5**: Web Dashboard and production-ready features
+
+---
+
 ## [0.1.0] - 2026-05-19
 
 ### 🎉 首次发布

@@ -2,7 +2,7 @@
 
 **AI Agent 认知状态追踪系统** - 让 AI 编程助手避免基于过时信息的错误操作
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue)]() [![Tests](https://img.shields.io/badge/tests-passing-brightgreen)]() [![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)]() [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue)]() [![License](https://img.shields.io/badge/license-MIT-green)]()
+[![Version](https://img.shields.io/badge/version-0.2.0-blue)]() [![Tests](https://img.shields.io/badge/tests-passing-brightgreen)]() [![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)]() [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue)]() [![License](https://img.shields.io/badge/license-MIT-green)]()
 
 ## 🎯 问题
 
@@ -329,12 +329,12 @@ cd mcp-server && npm install && npm run build
 - [x] 完整文档和配置示例
 - [x] 98% 测试覆盖率
 
-### v0.2 - 文件监控（计划中）
+### v0.2 - 文件监控 ✅ (已完成)
 
-- [ ] File System Watcher（主动监控文件变化）
-- [ ] File State Scanner（定期扫描文件状态）
-- [ ] 自动冲突检测（无需 Agent 主动调用）
-- [ ] 批量文件操作支持
+- [x] File System Watcher（主动监控文件变化）
+- [x] File State Scanner（实时扫描文件状态）
+- [x] 自动冲突检测（无需 Agent 主动调用）
+- [x] 批量文件操作支持
 
 ### v0.3 - 高级冲突检测
 

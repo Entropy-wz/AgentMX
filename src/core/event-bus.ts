@@ -27,6 +27,44 @@ export class EventBus implements IEventBus {
     this.emitter.emit('*', event); // Wildcard for all events
   }
 
+  async publishBatch(events: AgentMXEvent[]): Promise<void> {
+    if (!this.store) {
+      // No store, just emit events
+      for (const event of events) {
+        this.emitter.emit(event.event_type, event);
+        this.emitter.emit('*', event);
+      }
+      return;
+    }
+
+    // Batch persist to store using transaction
+    const db = (this.store as any).db;
+    const insert = db.prepare(`
+      INSERT INTO event_log (event_id, timestamp, project_path, event_type, payload)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    const transaction = db.transaction((events: AgentMXEvent[]) => {
+      for (const event of events) {
+        insert.run(
+          event.event_id,
+          event.timestamp,
+          event.project_path,
+          event.event_type,
+          JSON.stringify(event)
+        );
+      }
+    });
+
+    transaction(events);
+
+    // Emit all events after successful persist
+    for (const event of events) {
+      this.emitter.emit(event.event_type, event);
+      this.emitter.emit('*', event);
+    }
+  }
+
   subscribe<T extends AgentMXEvent>(
     eventType: T['event_type'],
     handler: EventHandler<T>

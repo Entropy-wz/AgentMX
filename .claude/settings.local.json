@@ -12,7 +12,8 @@
       "Bash(git commit *)",
       "Bash(chmod +x agentmx.sh)",
       "Bash(npm list *)",
-      "mcp__agentmx__get_event_history"
+      "mcp__agentmx__get_event_history",
+      "Bash(npm test *)"
     ]
   }
 }
