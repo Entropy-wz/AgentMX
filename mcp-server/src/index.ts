@@ -51,6 +51,43 @@ function computeHash(content: string): string {
   return createHash('sha256').update(content).digest('hex');
 }
 
+// Check if AgentMX is enabled for a project
+function isAgentMXEnabled(projectPath: string): boolean {
+  const markerFile = path.join(projectPath, '.agentmx-enabled');
+  const enabled = fs.existsSync(markerFile);
+
+  if (!enabled) {
+    log('DEBUG', 'AgentMX not enabled for project', { projectPath, markerFile });
+  }
+
+  return enabled;
+}
+
+// Helper to create "not enabled" response
+function createNotEnabledResponse(projectPath: string) {
+  return {
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify({
+          success: false,
+          error: {
+            code: 'AGENTMX_NOT_ENABLED',
+            message: 'AgentMX is not enabled for this project',
+            project_path: projectPath,
+            how_to_enable: [
+              `Create a marker file: touch ${path.join(projectPath, '.agentmx-enabled')}`,
+              'Or run: echo "" > .agentmx-enabled',
+              'Then AgentMX will automatically work in this project',
+            ],
+            why: 'AgentMX uses opt-in per-project to avoid polluting unrelated projects',
+          },
+        }, null, 2),
+      },
+    ],
+  };
+}
+
 // Initialize AgentMX
 let store: CognitiveStore;
 let eventBus: EventBus;
@@ -285,6 +322,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'record_file_read': {
         const { file_path, content_hash, agent_id = AGENTMX_AGENT_ID, project_path = process.cwd() } = args as any;
 
+        // Check if AgentMX is enabled for this project
+        if (!isAgentMXEnabled(project_path)) {
+          return createNotEnabledResponse(project_path);
+        }
+
         log('DEBUG', 'record_file_read', { file_path, content_hash, agent_id });
 
         // Record observation
@@ -336,6 +378,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'record_file_write': {
         const { file_path, old_hash, new_hash, agent_id = AGENTMX_AGENT_ID, project_path = process.cwd() } = args as any;
 
+        // Check if AgentMX is enabled for this project
+        if (!isAgentMXEnabled(project_path)) {
+          return createNotEnabledResponse(project_path);
+        }
+
         log('DEBUG', 'record_file_write', { file_path, old_hash, new_hash, agent_id });
 
         // Record file state
@@ -386,6 +433,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'check_conflicts': {
         const { file_path, agent_id = AGENTMX_AGENT_ID, project_path = process.cwd() } = args as any;
 
+        // Check if AgentMX is enabled for this project
+        if (!isAgentMXEnabled(project_path)) {
+          return createNotEnabledResponse(project_path);
+        }
+
         log('DEBUG', 'check_conflicts', { file_path, agent_id });
 
         const lastRead = await store.getAgentLastRead(agent_id, file_path);
@@ -432,7 +484,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'get_event_history': {
-        const { file_path, agent_id, event_type, start_time, end_time, limit = 50, project_path } = args as any;
+        const { file_path, agent_id, event_type, start_time, end_time, limit = 50, project_path = process.cwd() } = args as any;
+
+        // Check if AgentMX is enabled for this project
+        if (project_path && !isAgentMXEnabled(project_path)) {
+          return createNotEnabledResponse(project_path);
+        }
 
         log('DEBUG', 'get_event_history', { file_path, agent_id, event_type, limit });
 
@@ -467,7 +524,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'get_conflict_history': {
-        const { file_path, agent_id, limit = 50 } = args as any;
+        const { file_path, agent_id, limit = 50, project_path = process.cwd() } = args as any;
+
+        // Check if AgentMX is enabled for this project
+        if (!isAgentMXEnabled(project_path)) {
+          return createNotEnabledResponse(project_path);
+        }
 
         log('DEBUG', 'get_conflict_history', { file_path, agent_id, limit });
 
@@ -491,7 +553,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'get_file_state': {
-        const { file_path, include_history = false, history_limit = 10 } = args as any;
+        const { file_path, include_history = false, history_limit = 10, project_path = process.cwd() } = args as any;
+
+        // Check if AgentMX is enabled for this project
+        if (!isAgentMXEnabled(project_path)) {
+          return createNotEnabledResponse(project_path);
+        }
 
         log('DEBUG', 'get_file_state', { file_path, include_history });
 
@@ -516,7 +583,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'resolve_conflict': {
-        const { conflict_id, resolution_action, notes } = args as any;
+        const { conflict_id, resolution_action, notes, project_path = process.cwd() } = args as any;
+
+        // Check if AgentMX is enabled for this project
+        if (!isAgentMXEnabled(project_path)) {
+          return createNotEnabledResponse(project_path);
+        }
 
         log('DEBUG', 'resolve_conflict', { conflict_id, resolution_action });
 

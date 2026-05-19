@@ -6,7 +6,9 @@
       "Bash(git commit -m ' *)",
       "Skill(superpowers:writing-plans)",
       "Bash(npm install *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(git commit -m 'Add MCP Server quick start guide *)",
+      "Bash(node test/test-project-control.mjs)"
     ]
   }
 }
