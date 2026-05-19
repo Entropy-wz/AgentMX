@@ -8,7 +8,9 @@
       "Bash(npm install *)",
       "Bash(npm run *)",
       "Bash(git commit -m 'Add MCP Server quick start guide *)",
-      "Bash(node test/test-project-control.mjs)"
+      "Bash(node test/test-project-control.mjs)",
+      "Bash(git commit *)",
+      "Bash(chmod +x agentmx.sh)"
     ]
   }
 }
