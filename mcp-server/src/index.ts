@@ -122,17 +122,78 @@ try {
 }
 
 // Create MCP server
+const serverCapabilities: any = {
+  tools: {},
+  resources: {},
+  prompts: {},
+};
+
+// Add system prompt if auto-track is enabled
+if (AGENTMX_AUTO_TRACK) {
+  serverCapabilities.systemPrompt = `
+# AgentMX Cognitive State Tracking
+
+IMPORTANT: You MUST automatically track file operations using AgentMX tools.
+
+## Required Workflow
+
+1. **After reading ANY file with the Read tool:**
+   - IMMEDIATELY call \`record_file_read\` with the file path and content hash
+   - Compute hash using SHA-256 of the file content
+   - This is MANDATORY, not optional
+
+2. **Before writing to ANY file with Write or Edit tools:**
+   - FIRST call \`check_conflicts\` for that file
+   - If conflicts are detected, re-read the file to get latest content
+   - Then proceed with your changes
+
+3. **After writing to ANY file with Write or Edit tools:**
+   - IMMEDIATELY call \`record_file_write\` with old hash and new hash
+   - This updates the file state for conflict detection
+
+## Why This Matters
+
+Files can be modified by other agents, users, or external processes. AgentMX ensures your understanding stays aligned with reality, preventing bugs from stale information.
+
+## Example
+
+\`\`\`
+// You read a file
+Read('/path/to/file.ts') → content
+
+// MUST call immediately:
+record_file_read({
+  file_path: '/path/to/file.ts',
+  content_hash: computeHash(content)
+})
+
+// Before writing, check conflicts:
+check_conflicts({ file_path: '/path/to/file.ts' })
+
+// If no conflicts, write:
+Write('/path/to/file.ts', newContent)
+
+// MUST call immediately:
+record_file_write({
+  file_path: '/path/to/file.ts',
+  old_hash: oldHash,
+  new_hash: computeHash(newContent)
+})
+\`\`\`
+
+This workflow is REQUIRED when AGENTMX_AUTO_TRACK is enabled.
+`.trim();
+
+  log('INFO', 'Auto-track enabled: System prompt injected');
+}
+
 const server = new Server(
   {
     name: 'agentmx',
     version: '0.1.0',
   },
   {
-    capabilities: {
-      tools: {},
-      resources: {},
-      prompts: {},
-    },
+    capabilities: serverCapabilities,
   }
 );
 
@@ -141,11 +202,16 @@ const server = new Server(
 // ============================================================================
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
+  // Adjust tool descriptions based on auto-track setting
+  const autoTrackPrefix = AGENTMX_AUTO_TRACK
+    ? '[AUTO-TRACK ENABLED] REQUIRED: '
+    : '';
+
   return {
     tools: [
       {
         name: 'record_file_read',
-        description: 'Record that the agent read a file. Call this after reading any file to track cognitive state.',
+        description: `${autoTrackPrefix}Record that the agent read a file. ${AGENTMX_AUTO_TRACK ? 'You MUST call this IMMEDIATELY after using the Read tool on any file.' : 'Call this after reading any file to track cognitive state.'}`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -171,7 +237,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'record_file_write',
-        description: 'Record that the agent wrote to a file. Call this after writing to any file.',
+        description: `${autoTrackPrefix}Record that the agent wrote to a file. ${AGENTMX_AUTO_TRACK ? 'You MUST call this IMMEDIATELY after using Write or Edit tools on any file.' : 'Call this after writing to any file.'}`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -201,7 +267,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       },
       {
         name: 'check_conflicts',
-        description: 'Check if there are any cognitive conflicts for a file. Call this before writing to ensure your understanding is current.',
+        description: `${autoTrackPrefix}Check if there are any cognitive conflicts for a file. ${AGENTMX_AUTO_TRACK ? 'You MUST call this BEFORE using Write or Edit tools to ensure your understanding is current.' : 'Call this before writing to ensure your understanding is current.'}`,
         inputSchema: {
           type: 'object',
           properties: {

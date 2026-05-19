@@ -24,28 +24,40 @@ npm install
 npm run build
 ```
 
-### 3. 配置 Claude Code（全局配置，一次性）
+### 3. 配置 Claude Code（项目级别配置）
 
-编辑 `~/.claude/settings.json`（如果不存在则创建）：
+**重要：** Claude Code 的 MCP 配置是项目级别的，需要在每个使用 AgentMX 的项目中单独配置。
 
-```json
-{
-  "mcpServers": {
-    "agentmx": {
-      "command": "node",
-      "args": ["D:/exp_all/AgentMX/mcp-server/dist/index.js"],
-      "env": {
-        "AGENTMX_AUTO_TRACK": "true",
-        "AGENTMX_LOG_LEVEL": "INFO"
-      }
-    }
-  }
-}
+在你的项目目录中运行：
+
+```bash
+cd /path/to/your/project
+claude mcp add agentmx -e AGENTMX_AUTO_TRACK=true -e AGENTMX_LOG_LEVEL=INFO -- node /path/to/AgentMX/mcp-server/dist/index.js
+```
+
+**示例（Windows）：**
+```bash
+cd D:/exp_all/my_project
+claude mcp add agentmx -e AGENTMX_AUTO_TRACK=true -e AGENTMX_LOG_LEVEL=INFO -- node D:/exp_all/AgentMX/mcp-server/dist/index.js
+```
+
+**示例（Mac/Linux）：**
+```bash
+cd ~/projects/my_project
+claude mcp add agentmx -e AGENTMX_AUTO_TRACK=true -e AGENTMX_LOG_LEVEL=INFO -- node ~/AgentMX/mcp-server/dist/index.js
+```
+
+**验证配置：**
+```bash
+claude mcp list
+```
+
+应该看到：
+```
+agentmx: node /path/to/AgentMX/mcp-server/dist/index.js - ✓ Connected
 ```
 
 **注意：** MCP Server 会自动检测项目目录。如果项目有 `.agentmx-enabled` 文件，数据库会保存在项目的 `.agentmx/` 目录下；否则使用全局目录 `~/.agentmx/db/`。
-
-**重要：** 将路径 `D:/exp_all/AgentMX/mcp-server/dist/index.js` 替换为你的实际路径。
 
 ### 4. 为项目启用 AgentMX
 
@@ -73,20 +85,35 @@ type nul > .agentmx-enabled
 
 ### 方法1：检查可用工具
 
-在**已启用 AgentMX 的项目**中，在 Claude Code 中输入：
+在**已启用 AgentMX 的项目**中，在 Claude Code 中运行：
+
+```
+/mcp
+```
+
+**重要：** AgentMX 工具显示在 `/mcp` 命令中，而不是 `/tools` 命令。
+
+你应该看到：
+```
+agentmx · ✔ connected · 7 tools
+```
+
+点击展开后可以看到 7 个工具：
+- `record_file_read` - 记录文件读取操作
+- `record_file_write` - 记录文件写入操作
+- `check_conflicts` - 检查认知冲突
+- `get_event_history` - 查询事件历史
+- `get_conflict_history` - 查询冲突历史
+- `get_file_state` - 获取文件状态
+- `resolve_conflict` - 解决冲突
+
+**或者**，你也可以询问 Claude：
 
 ```
 请列出你可用的 AgentMX 工具
 ```
 
-Claude 应该能看到 7 个工具：
-- record_file_read
-- record_file_write
-- check_conflicts
-- get_event_history
-- get_conflict_history
-- get_file_state
-- resolve_conflict
+Claude 会列出所有可用的工具及其说明。
 
 ### 方法2：测试项目级别控制
 
@@ -129,31 +156,66 @@ cat .agentmx-enabled
 touch .agentmx-enabled
 ```
 
-### 场景1：Claude 自动追踪文件读取
-
-当 `AGENTMX_AUTO_TRACK=true` 时，Claude 会自动加载追踪指令。
+### 场景1：记录文件读取
 
 **你说：**
 ```
-请读取 src/main.ts 并告诉我它的功能
+请使用 AgentMX 记录你读取了 src/main.ts，hash 是 abc123...
 ```
 
 **Claude 会：**
-1. 读取文件
-2. 自动调用 `record_file_read` 记录读取操作
-3. 分析并回答你的问题
+```
+调用 record_file_read({
+  file_path: "/path/to/src/main.ts",
+  content_hash: "abc123..."
+})
+```
+
+**返回：**
+```json
+{
+  "observation_id": "uuid-here",
+  "message": "File read recorded successfully"
+}
+```
+
+**注意：** 当 `AGENTMX_AUTO_TRACK=true` 时，Claude 会收到系统级提示，自动在文件操作后调用 AgentMX 工具。这个功能已实现，但依赖 Claude 的遵守（预期可靠性约 80%）。如果 Claude 没有自动调用，你可以手动提示。
 
 ### 场景2：检测认知冲突
 
 **你说：**
 ```
-请修改 src/main.ts，添加一个新函数
+请检查 src/main.ts 是否有冲突
 ```
 
 **Claude 会：**
-1. 调用 `check_conflicts` 检查文件是否被修改
-2. 如果检测到冲突，重新读取文件
-3. 基于最新内容进行修改
+```
+调用 check_conflicts({
+  file_path: "/path/to/src/main.ts"
+})
+```
+
+**如果有冲突，返回：**
+```json
+{
+  "has_conflict": true,
+  "conflicts": [{
+    "conflict_id": "uuid-here",
+    "conflict_type": "G1_stale_read",
+    "severity": "medium",
+    "description": "Your understanding of this file is outdated...",
+    "recommended_action": "Re-read the file before making changes..."
+  }]
+}
+```
+
+**如果无冲突，返回：**
+```json
+{
+  "has_conflict": false,
+  "conflicts": []
+}
+```
 
 ### 场景3：查询事件历史
 
@@ -163,8 +225,59 @@ touch .agentmx-enabled
 ```
 
 **Claude 会：**
-1. 调用 `get_event_history` 查询该文件的所有事件
-2. 展示完整的操作时间线
+```
+调用 get_event_history({
+  file_path: "/path/to/src/main.ts",
+  limit: 50
+})
+```
+
+**返回：**
+```json
+{
+  "events": [
+    {
+      "event_id": "uuid-1",
+      "event_type": "file_state_changed",
+      "timestamp": 1234567890,
+      "file_path": "/path/to/src/main.ts",
+      "details": { "change_type": "modified", "new_hash": "..." }
+    },
+    {
+      "event_id": "uuid-2",
+      "event_type": "agent_file_read",
+      "timestamp": 1234567800,
+      "agent_id": "claude-main",
+      "details": { "content_hash": "..." }
+    }
+  ],
+  "total_count": 2
+}
+```
+
+### 场景4：解决冲突
+
+**当检测到冲突后：**
+```
+请解决冲突 uuid-here，使用 prompt_reread 动作
+```
+
+**Claude 会：**
+```
+调用 resolve_conflict({
+  conflict_id: "uuid-here",
+  resolution_action: "prompt_reread",
+  notes: "Re-read file to get latest content"
+})
+```
+
+**返回：**
+```json
+{
+  "success": true,
+  "message": "Conflict uuid-here resolved with action: prompt_reread"
+}
+```
 
 ## 📊 查看数据库
 
@@ -231,8 +344,16 @@ Agent 标识符：
 
 自动追踪模式：
 
-- `true`：Claude 自动加载追踪指令（推荐）
-- `false`：需要手动提示 Claude 使用工具
+- `true`：注入系统级提示，要求 Claude 自动在文件操作后调用 AgentMX 工具（推荐）
+  - **实现方式：** System Prompt 注入
+  - **可靠性：** 约 80%（依赖 Claude 遵守系统提示）
+  - **行为：** Claude 会在读取文件后自动调用 `record_file_read`，写入前调用 `check_conflicts`，写入后调用 `record_file_write`
+  - **注意：** 如果 Claude 没有自动调用，你可以手动提示
+  
+- `false`：不注入系统提示，需要手动提示 Claude 使用工具
+  - **适用场景：** 你想完全控制何时使用 AgentMX
+  - **优点：** 不增加系统提示的 token 成本
+  - **缺点：** 每次都需要手动提示
 
 ### AGENTMX_LOG_LEVEL
 

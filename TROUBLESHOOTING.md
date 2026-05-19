@@ -4,11 +4,61 @@
 
 ### 症状
 - 在 Claude Code 中，AgentMX 的 MCP 工具没有出现
+- 运行 `/tools` 看不到 `record_file_read` 等工具
 - 询问 Claude 使用 AgentMX 时，Claude 表示不知道 AgentMX 是什么
 
 ### 可能的原因和解决方案
 
-#### 1. MCP Server 没有正确启动
+#### 1. MCP Server 未在当前项目中配置（最常见）
+
+**原因：** Claude Code 的 MCP 配置是**项目级别**的，不是全局的。每个项目需要单独配置。
+
+**检查方法：**
+
+在你的项目目录中运行：
+```bash
+cd /path/to/your/project
+claude mcp list
+```
+
+如果显示 "No MCP servers configured"，说明当前项目没有配置 MCP Server。
+
+**解决方案：**
+
+在项目目录中添加 AgentMX：
+
+```bash
+cd /path/to/your/project
+claude mcp add agentmx -e AGENTMX_AUTO_TRACK=true -e AGENTMX_LOG_LEVEL=INFO -- node /path/to/AgentMX/mcp-server/dist/index.js
+```
+
+**示例（Windows）：**
+```bash
+cd D:/exp_all/my_project
+claude mcp add agentmx -e AGENTMX_AUTO_TRACK=true -e AGENTMX_LOG_LEVEL=INFO -- node D:/exp_all/AgentMX/mcp-server/dist/index.js
+```
+
+**验证：**
+```bash
+claude mcp list
+```
+
+应该看到：
+```
+agentmx: node /path/to/AgentMX/mcp-server/dist/index.js - ✓ Connected
+```
+
+然后重启 Claude Code：
+```bash
+/exit
+# 关闭终端，重新打开
+cd /path/to/your/project
+claude
+```
+
+在 Claude Code 中运行 `/tools`，应该看到 AgentMX 工具。
+
+#### 2. MCP Server 依赖缺失
 
 **检查方法：**
 
@@ -233,6 +283,34 @@ node D:/exp_all/AgentMX/mcp-server/dist/index.js
 ```
 
 ## 常见错误信息
+
+### "UNMET DEPENDENCY" 或依赖缺失
+
+**症状：** 
+- Claude Code 中看不到 AgentMX 工具
+- 运行 `npm list` 显示 UNMET DEPENDENCY
+
+**原因：** MCP Server 的依赖没有安装（常见于首次安装或 git clone 后）
+
+**解决：**
+```bash
+cd D:/exp_all/AgentMX/mcp-server
+npm install
+npm run build
+```
+
+**验证：**
+```bash
+npm list --depth=0
+```
+
+应该看到所有依赖都已安装，没有 "UNMET DEPENDENCY" 错误。
+
+**重要：** AgentMX 项目有两个 package.json：
+- 根目录的 `package.json`（核心库）
+- `mcp-server/package.json`（MCP Server）
+
+两者都需要单独运行 `npm install`。
 
 ### "Cannot find module"
 
