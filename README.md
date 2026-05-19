@@ -2,7 +2,7 @@
 
 **AI Agent 认知状态追踪系统** - 让 AI 编程助手避免基于过时信息的错误操作
 
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)]() [![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)]() [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.1.0-blue)]() [![Tests](https://img.shields.io/badge/tests-passing-brightgreen)]() [![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen)]() [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue)]() [![License](https://img.shields.io/badge/license-MIT-green)]()
 
 ## 🎯 问题
 
@@ -266,47 +266,115 @@ cd /path/to/project
 - [MCP Server 设计](docs/MCP_SERVER_DESIGN.md) - MCP 集成方案
 - [项目级别控制](docs/PROJECT_LEVEL_CONTROL.md) - 启用/禁用机制
 
+## 🎉 v0.1.0 发布 (2026-05-19)
+
+**AgentMX v0.1.0 正式发布！** 这是第一个可用版本，提供完整的认知状态追踪核心功能。
+
+### ✨ 主要特性
+
+- ✅ **事件驱动架构**：Event Bus + Cognitive Store
+- ✅ **MCP Server 集成**：7 个核心工具，完整的 Claude Code 支持
+- ✅ **自动追踪**：通过 Claude Code Hooks 实现零侵入式追踪
+- ✅ **项目级别控制**：opt-in 机制，按需启用
+- ✅ **G1 冲突检测**：Stale Read 检测和提示
+- ✅ **完整文档**：快速开始、API 参考、配置示例
+
+### 📦 包含内容
+
+- **核心库**：`agentmx@0.1.0` - Event Bus + Cognitive Store
+- **MCP Server**：`agentmx-mcp-server@0.1.0` - 7 个 MCP 工具
+- **配置示例**：Claude Code Hooks 配置
+- **测试覆盖**：98% 代码覆盖率
+- **演示程序**：G1 冲突场景演示
+
+### 🚀 快速开始
+
+```bash
+# 克隆项目
+git clone https://github.com/yourusername/AgentMX.git
+cd AgentMX
+
+# 安装和构建
+npm install && npm run build
+cd mcp-server && npm install && npm run build
+
+# 为项目启用
+./agentmx.sh enable
+
+# 配置 Claude Code（见 QUICKSTART.md）
+```
+
+### 📝 已知限制
+
+- 仅支持 G1 (Stale Read) 冲突检测
+- 需要手动配置 Claude Code Hooks
+- 暂不支持文件系统主动监控
+- 暂不支持 G2/G3 冲突类型
+
+### 🔜 下一步计划
+
+查看下方路线图了解未来版本规划。
+
+---
+
 ## 🗺️ 路线图
 
-### v0.1 - 核心基础 ✅
+### v0.1 - 核心基础 ✅ (已发布)
 
 - [x] Event Bus + Cognitive Store
-- [x] MCP Server 集成
+- [x] MCP Server 集成（7 个工具）
+- [x] Claude Code Hooks 自动追踪
 - [x] 项目级别控制
-- [x] 基础冲突检测 (G1)
+- [x] 基础冲突检测 (G1 Stale Read)
+- [x] 完整文档和配置示例
+- [x] 98% 测试覆盖率
 
-### v0.2 - 文件监控（进行中）
+### v0.2 - 文件监控（计划中）
 
-- [ ] File System Watcher
-- [ ] File State Scanner
-- [ ] 自动冲突检测
+- [ ] File System Watcher（主动监控文件变化）
+- [ ] File State Scanner（定期扫描文件状态）
+- [ ] 自动冲突检测（无需 Agent 主动调用）
+- [ ] 批量文件操作支持
 
 ### v0.3 - 高级冲突检测
 
 - [ ] G2 冲突检测（并发写入）
 - [ ] G3 冲突检测（幻读）
-- [ ] 冲突解决策略
+- [ ] 冲突解决策略引擎
+- [ ] 冲突优先级和严重性评估
 
 ### v0.4 - 智能决策
 
-- [ ] Decision Engine
+- [ ] Decision Engine（决策引擎）
 - [ ] 自动恢复策略
 - [ ] 冲突模式学习
+- [ ] 多 Agent 协作支持
 
 ### v0.5 - 生产就绪
 
-- [ ] 性能优化
-- [ ] 图数据库迁移
-- [ ] 多 Agent 协作
-- [ ] Web Dashboard
+- [ ] 性能优化和基准测试
+- [ ] 图数据库迁移（可选）
+- [ ] Web Dashboard（可视化界面）
+- [ ] 监控和可观测性
+
+## 📋 更新日志
+
+查看 [CHANGELOG.md](CHANGELOG.md) 了解详细的版本历史。
 
 ## 🤝 贡献
 
-欢迎贡献！请查看 [CONTRIBUTING.md](CONTRIBUTING.md)（待创建）
+欢迎贡献！AgentMX 是一个开源项目，我们欢迎：
+
+- 🐛 Bug 报告和修复
+- ✨ 新功能建议和实现
+- 📖 文档改进
+- 🧪 测试用例补充
+
+请通过 [GitHub Issues](https://github.com/yourusername/AgentMX/issues) 提交问题或建议。
 
 ## 📄 许可证
 
-MIT License - 详见 [LICENSE](LICENSE)（待创建）
+MIT License - 详见 [LICENSE](LICENSE)
 
 ## 🙏 致谢
 
