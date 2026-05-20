@@ -14,6 +14,7 @@ export class CognitiveStore implements ICognitiveStore {
   private db: Database.Database;
 
   constructor(dbPath: string) {
+    if (process.env.DEBUG_STORE) console.log('[CognitiveStore] Constructor called, methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(this)));
     this.db = new Database(dbPath);
     this.initializeSchema();
   }
