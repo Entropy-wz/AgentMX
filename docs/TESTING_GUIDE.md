@@ -450,9 +450,10 @@ cat D:\exp_all\mx_test1\src\utils.js
 ```
 调用 start_watching 工具，参数：
 - project_path: "D:\exp_all\mx_test1"
-- watch_patterns: ["src/**/*.js", "tests/**/*.js"]
-- ignore_patterns: ["node_modules/**", "*.log"]
 ```
+
+**注意**：`start_watching` 会监控整个项目目录下的所有文件变化。
+文件过滤功能（watch_patterns、ignore_patterns）计划在 v0.3+ 中实现。
 
 **预期结果**：
 - ✅ 返回 JSON 对象
@@ -847,11 +848,11 @@ touch .agentmx-enabled
 # 1. 确认监控已启动
 # 在 Claude Code 中调用 start_watching
 
-# 2. 检查文件是否在监控范围内
-# 确保文件路径匹配 watch_patterns
+# 2. 检查文件是否在项目目录内
+# start_watching 监控整个项目目录，所以文件必须在项目内
 
-# 3. 检查是否在忽略列表中
-# 确保文件路径不匹配 ignore_patterns
+# 3. 检查文件是否在默认忽略列表中
+# 默认忽略：node_modules, .git, dist, build, coverage, .agentmx.db
 
 # 4. 等待足够的防抖时间（2-3 秒）
 ```
